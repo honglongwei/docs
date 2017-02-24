@@ -1,0 +1,273 @@
+#top.sls
+vim /srv/salt/top.sls
+base:
+  '*':
+    - tes
+    
+    
+#state.sls
+vim /srv/salt/tes/tes_init_mod.sls 
+tes_init_mod:
+    file.managed:
+    - name: C:\salt\var\cache\salt\minion\extmods\modules\tesmod.py 
+    - source: salt://tes/tesmod.py
+    - template: jinja
+  
+  
+  
+#module.py
+vim /srv/salt/test/xj5mod.py
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import time
+import zipfile
+import datetime
+from subprocess import Popen
+
+# Define the module's virtual name
+__virtualname__ = 'gserver'
+
+gid = {{ grains['haha' ]}}
+#src update package path
+src_path = 'D:\\update'
+#des update package path
+des_path = 'D:\\xj5_{{ grains['haha'] }}'
+#process list
+pro_lt = 'A B C D E F'
+#src backup package path
+bsrc_path_lt = ['D:\\dist_{{ grains['haha'] }}\\bin', 'D:\\dis_{{ grains['haha'] }}\\conf'] 
+#des backup package path
+bdes_path = 'D:\\backup'
+
+def __virtual__():
+    '''
+    Overwriting the gsrv python module makes debugging modules
+    with pdb a bit harder so lets do it this way instead.
+    '''
+    return __virtualname__
+
+def stop():
+    '''
+        Desc: Stop Server
+
+        Auth: honglongwei@20151221
+
+        CLI Example:
+                salt '*' gserver.stop
+    '''    
+#    gid = __salt__['grains.get']('haha')
+    cmd = 'd: && cd dist_{0} && shutdownServer.exe {0} 1'.format(gid)
+    proc = Popen(cmd, shell=True)
+    return 'Stop Server is running...,please wait !'
+
+
+def start():
+    '''
+        Desc: Start Server
+
+        Auth: honglongwei@20151221
+
+        CLI Example:
+                salt '*' gserver.start
+    '''    
+#    gid = __salt__['grains.get']('haha')
+    cmd = 'd: && cd dist_{0} && startServer.bat'.format(gid)
+    proc = Popen(cmd, shell=True)
+#    time.sleep(10)
+    ml = 'tasklist | findstr "{0}"'.format(pro_lt)
+    item = __salt__['cmd.shell'](ml) 
+    if 'A' and 'B' and 'C' and 'D' and 'E' and 'F' in item:
+        return 'Start Server is successful !'
+    else:
+        return 'Start Server is running...,please wait !'
+
+def status():
+    '''
+        Desc: Server Check Status
+
+        Auth: honglongwei@20151221
+
+        CLI Example:
+                salt '*' gserver.status
+    '''    
+    cmd = 'tasklist | findstr "{0}"'.format(pro_lt)
+    item = __salt__['cmd.shell'](cmd) 
+    cot = len(item.split('\n'))
+    ret = item + '\n' + '*'*76 + '\n' + 'The total of process is {0} !'.format(cot)
+    return ret
+
+
+def backup():
+    '''
+        Desc: Backup Server
+
+        Auth: honglongwei@20151221
+
+        CLI Example:
+                salt '*' gserver.backup
+    '''    
+    bakname = 'backup_' + datetime.datetime.now().strftime('%Y%m%d%H%M%S') + '.zip'
+    zipname = os.path.join(bdes_path, bakname)
+    f = zipfile.ZipFile(zipname, 'w', zipfile.ZIP_DEFLATED)
+    for bsrc_path in bsrc_path_lt:
+        bac_path = os.path.dirname(bsrc_path)
+        ls_path = bac_path + '\\'
+        zg_path = bsrc_path.split(ls_path)[1]
+        os.chdir(bac_path)
+        for dirpath, dirnames, filenames in os.walk(zg_path):
+            for filename in filenames:
+                f.write(os.path.join(dirpath, filename)) 
+    f.close()
+    return 'Backup is successful !'
+        
+
+def list_version():
+    '''
+        Desc: List Backup Server
+
+        Auth: honglongwei@20151221
+
+        CLI Example:
+                salt '*' gserver.list_version
+    '''    
+    ver_lt = []
+    for dirpath, dirnames, filenames in os.walk(bdes_path):
+        for filename in filenames:
+            ver_lt.append(filename)
+    return ver_lt
+
+
+def update(pkg):
+    '''
+        Desc: Server Update
+
+        Auth: honglongwei@20151220
+
+        CLI Example:
+                salt '*' gserver.update < pkg > 
+    '''    
+    if pkg:
+        fl = os.path.join(src_path, pkg)
+        try:
+            zfile = zipfile.ZipFile(fl,'r')
+            for filename in zfile.namelist():
+                zfile.extract(filename, des_path)
+            return 'Update is successful !'
+        except IOError:
+            return 'The package is invalid !!!' 
+    else:
+        return 'The package is invalid !!!'
+    
+
+def rollback(pkg):
+    '''
+        Desc: Server Rollback
+
+        Auth: honglongwei@20151220
+
+        CLI Example:
+                salt '*' gserver.rollback < pkg > 
+    '''    
+    if pkg:
+        fl = os.path.join(bdes_path, pkg)
+        try:
+            zfile = zipfile.ZipFile(fl,'r')
+            for filename in zfile.namelist():
+                zfile.extract(filename, des_path)
+            return 'Rollback is successful !'
+        except IOError:
+            return 'The package is invalid !!!' 
+    else:
+        return 'The package is invalid !!!'
+
+
+def check_start():
+    '''
+        Desc: Server Check Start
+
+        Auth: honglongwei@20151227
+
+        CLI Example:
+                salt '*' gserver.check_start
+    '''    
+    filelist =  os.listdir('D:\\dist_{0}\\Log'.format(gid)) 
+    fls = []
+    for filename in filelist:
+        log_list = ['a', 'b', 'c', 'd', 'e', 'f']
+        for file_log in log_list:
+            log_s = file_log + '_' + datetime.datetime.now().strftime('%Y%m%d%H') 
+            if  filename.startswith(log_s) and filename.endswith('.txt'):
+                fl_nm = os.path.join('D:\\xj5_{0}\\Log'.format(gid), filename)
+                with open(fl_nm) as f:
+                    if 'Server initialize end server started!' in f.read():
+                        ret = '{0}: Ok'.format(filename)
+                        fls.append(ret)
+                    else:
+                        ret = '{0}: Failed'.format(filename)
+                        fls.append(ret)
+            else:
+                pass
+    return fls
+
+
+
+def update_tdata(pkg):
+    '''
+        Desc: Server Update Tdata
+
+        Auth: honglongwei@20151229
+
+        CLI Example:
+                salt '*' gserver.update_tdata < pkg >
+    '''    
+    kf_time = __salt__['grains.get']('tm')
+    if pkg:
+        fl = os.path.join(src_path, pkg)
+        try:
+            zfile = zipfile.ZipFile(fl,'r')
+            for filename in zfile.namelist():
+                zfile.extract(filename, src_path)
+            psrc = src_path + '\\tdata\\' + kf_time
+            cmd = 'xcopy /y /e {0} {1}'.format(psrc, des_path)
+            proc = __salt__['cmd.run'](cmd)
+            return 'Update tdata is successful !'
+        except IOError:
+            return 'The package is invalid !!!' 
+    else:
+        return 'The package is invalid !!!'
+    
+
+
+def check_tdata():
+    '''
+        Desc: Server Check Tdata
+
+        Auth: honglongwei@20151229
+
+        CLI Example:
+                salt '*' gserver.check_tdata
+    '''    
+    kf_time = __salt__['grains.get']('kf') 
+    p_s = 'D:\\update\\tdata\\' + kf_time + '\\tdata'
+    fls = os.listdir(p_s)
+    mls = []
+    for filename in fls:
+        os.chdir(p_s)
+        flname = os.path.join(p_s, filename)
+        dlname = os.path.join('D:\\dist_{0}\\tdata'.format(gid), filename)
+        m1 = __salt__['cmd.run']('C:\\cygwin\\bin\\md5sum.exe {0}'.format(flname)).split('\n')[-1].split(' ')[0]  
+        m2 = __salt__['cmd.run']('C:\\cygwin\\bin\\md5sum.exe {0}'.format(dlname)).split('\n')[-1].split(' ')[0] 
+        if m1 == m2:
+            ret = '{0} is OK !'.format(filename)
+            mls.append(ret)
+        else:
+            ret = '{0} is Fail !'.format(filename)
+            mls.append(ret)
+    return mls
+    
+    
+    
+    #salt cmd
+    $salt -L "$ip" state.sls tes.tes_init_mod
